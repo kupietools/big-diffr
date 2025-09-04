@@ -1,0 +1,1932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Michael Kupietz. demos@michaelkupietz.com
+version history: 
+2025aug30 - first public demo posted.
+
+todo: look for the near-duplicate functions on create and load by searching for "view diff" and consolidate into one function
+-->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Big Diffr</title>
+    <style>
+    
+    :root {
+    --strikethrough-deleted: none; /* Default: no strikethrough */
+    --underline-inserted: none; /* Default: no underline */
+}
+
+.word-removed,
+.diff-line-removed .diff-line-content .line-content {
+    text-decoration: var(--strikethrough-deleted);
+}
+.word-added,
+.diff-line-added .diff-line-content .line-content {
+    text-decoration: var(--underline-inserted);
+}
+.leading-white-space {text-decoration: none;}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+.notes-input::placeholder {
+	color: #ccc;
+}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: clip; /* needs this for sticky on global actions */
+        }
+
+        .header {
+            background: #2563eb;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .floatright {
+            position:absolute;
+            top:4px;
+            right:4px;
+        }
+
+        .global-actions {
+            background: #f8fafc;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 15;
+        }
+
+        .settings-panel {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 10px 20px;
+            display: none;
+            position:fixed;
+            top:5px;
+            left:5px;
+            z-index:20;
+            max-height:95vh;
+            overflow-y:auto;
+            width:98vw;
+        }
+
+        .settings-panel.open {
+            display: block;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(50px /* 350px */, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .setting-group {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .setting-group h4 {
+            margin-bottom: 15px;
+            color: #374151;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .setting-item {
+            margin-bottom: 15px;
+        }
+
+        .setting-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .setting-item label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 5px;
+        }
+
+        .setting-description {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .setting-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .setting-controls input[type="range"] {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .setting-controls input[type="number"] {
+            width: 60px;
+            padding: 4px 6px;
+            border: 1px solid #d1d5db;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .setting-controls input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+
+        .value-display {
+            font-size: 12px;
+            color: #6b7280;
+            min-width: 35px;
+            text-align: right;
+            font-weight: 600;
+        }
+
+        .version-section {
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .version-section:last-child {
+            border-bottom: none;
+        }
+
+        .version-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .version-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .version-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .btn-settings {
+            background: #059669;
+            color: white;
+        }
+        
+        .btn-intro {
+
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 14px;
+    color:white;
+    background: #fe3038;}
+    .btn-intro:hover {background: #e02a28;
+   }
+        
+       .btn-close {
+            background: transparent;
+        }
+      .btn-close:hover {
+            background: #f9dccc;
+        }
+
+        .btn-settings:hover {
+            background: #047857;
+        }
+
+        .btn-settings.active {
+            background: #dc2626;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .notes-section {
+            margin-bottom: 15px;
+        }
+
+        .notes-section label {
+            display: block;
+            margin-bottom: 5px;
+            color: #374151;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .notes-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+            background: #fefce8;
+            border-color: #eab308;
+            height: calc(1.2em + 20px);
+        }
+
+        .notes-input:focus {
+            outline: none;
+            border-color: #ca8a04;
+            box-shadow: 0 0 0 1px #ca8a04;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .input-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-section h3 {
+            margin-bottom: 10px;
+            color: #374151;
+            font-weight: 600;
+        }
+
+        .text-input {
+            width: 100%;
+            height: 250px;
+            padding: 15px;
+            border: 2px solid #d1d5db;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+
+        .text-input:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+
+        .text-input[readonly] {
+            background: #f9fafb;
+            color: #6b7280;
+        }
+
+        .diff-details {
+            margin-top: 15px;
+        }
+.diff-details:has(> .diff-output > .diff-header) > summary {
+    background: #f3f4ff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+}
+
+.diff-details summary {
+    cursor: pointer;
+    padding: 10px;
+    background: #fafbfc;
+    border-radius: 4px;
+    font-weight: 600;
+    color: #ccc;
+    user-select: none;
+}
+
+        .diff-details summary:hover {
+            background: #e5e7eb;
+        }
+
+        .diff-details[open] summary {
+            border-radius: 4px 4px 0 0;
+            border-bottom: 1px solid #d1d5db;
+        }
+
+        .diff-output {
+            background: #f9fafb;
+            border: 1px solid #d1d5db;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+         /* font-size: 14px; */
+            font-size: 13px;
+         /* line-height: 1.6; */
+            line-height: 1;
+            min-height: 100px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .diff-line {
+         /* margin: 4px 0; */
+            margin: 1px 0;
+            padding: 4px 12px;
+            position: relative;
+            padding-right: 30px;
+        }
+
+        .diff-line-added {
+         /* background-color: #dcfce7; */
+            background-color: #bafcd6;
+            padding: 4px 8px;
+            border-radius: 3px;
+            border-left: 4px solid #16a34a;
+            padding-right: 30px;
+        }
+
+        .diff-line-removed {
+            background-color: #fecaca;  
+            padding: 4px 8px;
+            border-radius: 3px;
+            border-left: 4px solid #dc2626; 
+            padding-right: 30px;
+        }
+
+        .diff-line-modified {
+         /* background-color: #f0f9ff; */
+         /* background-color: #fff9ee; */
+         /* background-color: #cceeff; eoeoff */
+          /*  background-color: #e4edff;  */
+            background-color: #ffffe4;
+            padding: 4px 8px;
+            border-radius: 3px;
+         /* border-left: 4px solid #3b82f6 */
+         /* border-left: 4px solid #f6bb3b; */
+          /*  border-left: 4px solid #3bbbf6; */
+            border-left: 4px solid #f6bb3b;
+            padding-right: 30px;
+        }
+
+        .diff-prefix {
+            font-weight: bold;
+            margin-right: 8px;
+            display: inline-block;
+            min-width: 12px;
+        }
+    
+    .diff-equal {color:#ccc;}
+.diff-insert {color:#0c0;}
+.diff-delete {color:#c00;}
+
+        .word-added {
+         /*   background-color: #dcfce7; */
+            background-color: #bafcd6;
+         /* color: white; */
+         /* padding: 1px 4px; */
+         /* border-radius: 3px; */
+         /* font-weight: 600; */
+        }
+
+        .word-removed {
+      /*      background-color: #fecaca; */
+            background-color: #fecaca;  
+         /* color: white; */
+         /* padding: 1px 4px; */
+         /* border-radius: 3px; */
+         /* font-weight: 600; */
+        }
+
+        .diff-info-icon {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            background: #6b7280;
+            color: white;
+            border-radius: 50%;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.7;
+            z-index: 10;
+        }
+
+        .diff-info-icon:hover {
+            opacity: 1;
+            background: #374151;
+        }
+
+        .tooltip {
+            position: fixed;
+            background: #374151;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            line-height: 1.3;
+            z-index: 9999;
+            max-width: 300px;
+            white-space: normal;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+
+        .tooltip.show {
+            display: block;
+        }
+
+        .empty-state {
+            color: #9ca3af;
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .no-changes {
+            color: #16a34a;
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .hidden-input {
+            position: absolute;
+            left: -9999px;
+            opacity: 0;
+        }
+
+        @media (max-width: 768px) {
+            .input-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            body {
+                padding: 10px;
+            }
+            
+            .text-input {
+                height: 200px;
+            }
+
+            .global-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+
+.diff-line-numbers {
+    display: table-cell;
+    width: 1px;
+    padding: 0 8px 0 4px;
+    color: #999;
+    font-size: 0.9em;
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+    user-select: none;
+    border-right: 1px solid #e0e0e0;
+}
+
+.left-num, .right-num {
+    display: inline-block;
+    width: 30px;
+    text-align: right;
+}
+
+.left-num:after {
+    content: " |";
+    color: #ccc;
+}
+
+.diff-line-content {
+    display: table-cell;
+    padding-left: 8px;
+    width: 100%;
+    vertical-align: top;
+}
+
+.diff-header {border-bottom:1px solid #333;font-size:.8em;font-family:'courier new',courier,mono;position:relative;font-weight:400;}
+
+.diff-output {
+    display: table;
+    width: 100%;
+}
+
+/* Textarea line numbers */
+.textarea-container {
+    position: relative;
+    display: flex;
+}
+
+.line-numbers {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 40px;
+    padding: 8px 4px;
+    background: #f8f9fa;
+    border-right: 1px solid #e0e0e0;
+    color: #999;
+    font-family: monospace;
+    font-size: 0.9em;
+    line-height: 1.4;
+    text-align: right;
+    user-select: none;
+    pointer-events: none;
+    white-space: pre;
+    overflow: hidden;
+}
+
+.textarea-with-numbers {
+    padding-left: 50px !important;
+    margin: 0;
+}
+
+.container-unchanged > div:not(*:first-child):not(*:last-child):not(*:nth-child(2)) {
+	display: none;
+}
+
+.container-unchanged > div:nth-child(2):not(:last-child) > * {
+	opacity: 0;
+}
+.container-unchanged > div:nth-child(2):not(:last-child)::before {
+	content: "\22EE";
+	position: absolute;
+	width: 100%;
+	text-align: center;
+	margin-left: -12px;
+	font-weight: 900;
+	background: #ccc;
+    border-radius: 50%;
+    box-shadow: inset 2px 2px 4px #999;
+}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Big Diffr</h1>
+            <p>Compare consecutive revisions with smart inline diffing - ignores whitespace and blank lines </p>
+        </div>
+        
+        <div class="global-actions">
+            <button class="btn btn-settings" onclick="toggleSettings()" id="settingsBtn">⚙️ Settings</button>
+            <button class="btn btn-primary" onclick="saveState()">💾 Save Session</button>
+            <button class="btn btn-secondary" onclick="loadState()">📁 Load Session</button> 
+            <button class="btn btn-secondary" onclick="sampleFileLoad(sampleData)">🎬 Load With Demo Data</button>
+            <!-- SPACER span style="display:inline-block;flex-grow:2">&nbsp;</span -->
+            <button class="btn btn-secondary" onclick="toggleInstructions()">🕹 Instructions</button>
+            <input type="file" id="fileInput" class="hidden-input" accept=".json" onchange="handleFileLoad(event)">
+       </div>
+       <div class="settings-panel" id="instructionsPanel">
+<button class="btn btn-close floatright" onclick="toggleInstructions()" id="instructionsClose">❌</button>
+    <h3 style="margin-bottom: 15px; color: #374151;display:inline-block">Big Diffr</h3> - quickly see the differences between many consecutive revisions of your text or code. <p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">
+          
+       The idea is, if you have an automated process, such as an LLM, working on your code, every time it spits out a new version, you can never be completely sure what changes it has actually made, unless you check the entire output line-by-line. This makes that easy</p> <p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">In fact, this tool was developed because I learned that the hard way: I used Anthropic's Claude to help add new features to existing code of mine, but I didn't discover until much later on that it had also silently changed or removed other important parts of my code, which weren't at all related to what I was using it to work on. </p>
+       <div style="margin: 15px; padding:15px; color: #6b7280; font-size: 14px; background:white;border:1px solid gray;"><p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;"> <b style="color: #374151;display:inline">Quick Start, for people who just want to quickly demo this:</b></p>
+             <p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">1. Just hit the red ❌ at upper right to close this box</p><p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">2. click <button class="btn btn-secondary" style="display:inline-block;"  onclick="sampleFileLoad(sampleData)">🎬 Load With Demo Data</button></p><p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">3. Click the various lines where it says <b>▶︎ View Differences</b> to see the differences between various successive versions of the sample data.</p> </div> 
+    
+                    <details><summary> <h3 style="margin-bottom: 15px; color: #374151;display:inline">Detailed Instructions:</h3> (click to open)</summary>
+
+      <p style="margin-block: 15px; color: #6b7280; font-size: 14px;">Add your original code in the blank marked <b>Original Text
+</b>, and the first revision in the blank marked <b>Version 1</b>. When both have been entered, you will see a <b>▶︎ View Differences</b> line below them... you can click on this to open the diff and see all the differences between them.</p> <p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">Also, your <b>Version 1</b> will automatically be added as the starting revision on a new line below, ready for you to paste in <b>Version 2</b> and see the further changes as you create more revisions. </p> <p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">This way, every time an LLM generates a new revision to your code, you can paste it in and easily see everything it changed—whether it made only the revisions it said it would, or also made other changes you didn't ask for.</p>
+      <h3 style="margin-bottom: 15px; color: #374151;">Customizing the settings:</h3>
+      <p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">On occasion, the diff algorithm will indicate minor changes showing an entire line removed and another entire line inserted, as follows: </p><p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">
+       <span class="diff-line-removed"><span class="word-removed">- Here is one line, mostly the same as the other one.</span></span></p><p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">
+       <span class="diff-line-added"><span class="word-added">+ Here is another line, mostly the same as the other one.</span></span></p><p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">
+      I gave the algorithm the ability to decide, if two lines are similar enough, to compress the changes into a single line, as follows:</p><p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">
+      <span class="diff-line-modified">± Here is  <span class="word-removed">one</span><span class="word-added">another</span> line, mostly the same as the other one.</span></p><p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">
+      Because there is no "one size fits all" way of doing this, you can see and tweak the parameters the algorithm uses to decide whether changes should be shown by removing and adding complete lines in their entirety, or inline in a single line, by hitting the  <button class="btn btn-settings" onclick="toggleSettings()" style="display:inline-block" id="settingsBtn">⚙️ Settings</button>
+          button at top.</p>
+      
+      <h3 style="margin-bottom: 15px; color: #374151;">Saving and Reloading Sessions:</h3>
+    <p style="margin-block: 15px; color: #6b7280; font-size: 14px;">  In case you need to interrupt your work, you can save or reloads the entire state of the app, including all currently entered revisions, with the <button class="btn btn-primary" style="display:inline-block">💾 Save Session</button> and <button class="btn btn-secondary" style="display:inline-block">📁 Load Session</button> buttons.</p>
+      
+</details>
+    
+   
+    
+</div>   
+<div class="settings-panel" id="settingsPanel">
+<button class="btn btn-close floatright" onclick="toggleSettings()" id="settingsClose">❌</button>
+    <h3 style="margin-bottom: 15px; color: #374151;">Inline Diff Settings</h3>
+    <p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">
+        These settings control when changed lines are merged and displayed as a single line with<span class="word-added"> all</span><span class="word-removed"> changes</span><span class="word-added"> indicated</span><span class="word-removed"> inline</span> vs. shown separately as entire lines <span class="word-removed">- deleted</span> or <span class="word-added">+ inserted</span>. <strong>Hover your mouse on the <span class="diff-info-icon" style="position:static !important;display:inline-block;text-align;padding-inline: 4.5px;transform:none;">ℹ</span> icons</strong> on the right side of a diff line to see why it merged or not.
+    </p>
+    
+    <div class="settings-grid">
+        
+
+        <div class="setting-group">
+            <h4>Content Similarity</h4>
+              <div class="setting-item">
+                <label>Length similarity threshold</label>
+                <div class="setting-description">
+                    How similar in length two lines must be to consider merging them. Lower values are more permissive. Set to 0% to ignore length differences entirely.
+                </div>
+                <div class="setting-controls">
+                    <input type="range" id="lengthRatio" min="0" max="100" step="1" value="10" oninput="updateSetting('lengthRatio')">
+                    <span class="value-display" id="lengthRatioValue">10%</span>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Shared words requirement</label>
+                <div class="setting-description">
+                    Minimum percentage of words that must be shared between lines. Lower values are more permissive. Set to 0% to merge lines even with no common words.
+                </div>
+                <div class="setting-controls">
+                    <input type="range" id="wordSimilarity" min="0" max="100" step="1" value="5" oninput="updateSetting('wordSimilarity')">
+                    <span class="value-display" id="wordSimilarityValue">5%</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <label>Character difference tolerance</label>
+                <div class="setting-description">
+                    How different two lines can be character-wise and still merge. Higher values allow merging lines that look very different but have similar meaning (like "obj.method()" vs "object.method()").
+                </div>
+                <div class="setting-controls">
+                    <input type="range" id="charDifference" min="0" max="100" step="1" value="95" oninput="updateSetting('charDifference')">
+                    <span class="value-display" id="charDifferenceValue">95%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="setting-group">
+            <h4>Structure Matching (beta)</h4>
+            
+            <div class="setting-item">
+                <label><input type="checkbox" id="prefixSuffixCheck" onchange="updateSetting('prefixSuffixCheck')"> Require similar beginnings or endings</label>
+                <div class="setting-description">
+                    Lines must start similarly OR end similarly to be merged. Good for catching function calls with different parameters. Leave unchecked to be more permissive.
+                </div>
+                <!-- div class="setting-controls">
+                   checkbox moved from here
+                </div -->
+            </div>
+            
+            <div class="setting-item">
+                <label>Beginning similarity length</label>
+                <div class="setting-description">
+                    How many characters from the start of lines to compare for structural similarity.
+                </div>
+                <div class="setting-controls">
+                    <input type="number" id="prefixLength" min="0" max="1000" value="15" oninput="updateSetting('prefixLength')">
+                    <span class="value-display">chars</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <label>Ending similarity length</label>
+                <div class="setting-description">
+                    How many characters from the end of lines to compare for structural similarity.
+                </div>
+                <div class="setting-controls">
+                    <input type="number" id="suffixLength" min="0" max="1000" value="10" oninput="updateSetting('suffixLength')">
+                    <span class="value-display">chars</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="setting-group">
+            <h4>Advanced Options (beta)</h4>
+            
+            <div class="setting-item">
+                <label><input type="checkbox" id="patternCheck" onchange="updateSetting('patternCheck')"> Check abstract patterns</label>
+                <div class="setting-description">
+                    Compare the overall structure of lines (ignoring specific words/numbers). Helps catch similar code patterns. More CPU intensive.
+                </div>
+               <!-- div class="setting-controls">
+                   checkbox moved from here
+                </div -->
+            </div>
+            
+            <div class="setting-item">
+                <label>Pattern fallback threshold</label>
+                <div class="setting-description">
+                    When pattern matching is enabled, minimum word similarity required if patterns don't match exactly.
+                </div>
+                <div class="setting-controls">
+                    <input type="range" id="fallbackThreshold" min="0" max="100" step="1" value="80" oninput="updateSetting('fallbackThreshold')">
+                    <span class="value-display" id="fallbackThresholdValue">80%</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <label>Max highlighting groups</label>
+                <div class="setting-description">
+                    Maximum number of insert/delete changes allowed to be merged and shown inline in a single line. Lines with more than this number of internal changes will always show as separate added/removed lines instead. Higher values allow more complex inline diffs (ie, harder to read).
+                </div>
+                <div class="setting-controls">
+                    <input type="number" id="maxChangeGroups" min="0" max="1000" value="5" oninput="updateSetting('maxChangeGroups')">
+                    <span class="value-display">groups</span>
+                </div>
+            </div>
+        </div>
+    </div>  <div class="settings-grid"><div class="setting-group"><label>Visual Options: </label>
+    <input type="checkbox" id="strikethroughDeleted">
+    <span>Show <span class="word-removed" style="xtext-decoration:#900 line-through !important;">Strike-Through</span> on deleted text</span> <input type="checkbox" id="underlineInserted">
+    <span>Show <span class="word-added" style="xtext-decoration:#090 wavy underline !important;">Wavy Underline</span> on inserted text</span>
+    </div>    </div>
+    
+</div>        
+     
+
+        <div id="versionsContainer">
+            <!-- Initial version will be added by JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        let versionCounter = 1;
+        let versions = [];
+        let globalTooltip = null;
+        let isRestoringState = false;
+let lastRenderedRow="";
+        // FIXED: Very loose defaults with full 0-100% range
+        let diffSettings = {
+            lengthRatio: 0.1,        // 10%
+            prefixLength: 15,
+            suffixLength: 10,
+            wordSimilarity: 0.05,    // 5%
+            charDifference: 0.95,    // 95%
+            fallbackThreshold: 0.8,
+            maxChangeGroups: 5,
+            patternCheck: false,
+            prefixSuffixCheck: false
+        };
+        
+        const sampleData = {
+  "timestamp": "2025-08-19T02:36:37.563Z",
+  "versionCounter": 4,
+  "versions": [
+    {
+      "id": 1,
+      "originalText": "function addDetailsPreview() {\n\nglobal $selectors;\n\nglobal $avoid;\n\n?> <script id=\"ktwp-details-excerpt\">\npgsql\n\n    document.querySelectorAll('<?php echo $selectors; ?>').forEach(details => {\n        // Get the summary element\n        const summary = details.querySelectorAll('summary<?php echo ($avoid==''?'':(','.$avoid)); ?>');\n        if (!summary) return;\n\n        // Get all text content, excluding the summary\n        let allText = Array.from(details.childNodes)\n           // .filter(node => node !== summary) // Exclude summary\n             .filter(node => !Array.from(summary).includes(node))\n        .map(node => node.textContent || '')\n            .join(' ')\n            .trim();\n       allText = allText.replace(/<\\!--.*?-->/g, \"\"); /* get rid of comments */\n        // If there's text content, create and append the preview\n        if (allText) {\n            const preview = document.createElement('span');\n            preview.className = 'detailspreview';\n            // Limit to 250 characters and add ellipsis\n            preview.textContent = (allText.length > 250 ? \n                allText.substring(0, 247) + '...' : \n                allText);\n             details.querySelector('summary').appendChild(preview);\n\t\t\tdetails.querySelector('summary').classList.add('ktwp-details-preview-added-summary');\n\t\t\tdetails.classList.add('ktwp-details-preview-added');\n        }\n    });\n<\/script>\n\n<?php\n\n}",
+      "modifiedText": "function addDetailsPreview() {\nglobal $selectors;\nglobal $avoid;\n    ?>   <script id=\"ktwp-details-excerpt\">\n        document.querySelectorAll('<?php echo $selectors; ?>').forEach(details => {\n            // Get the summary element\n            const summary = details.querySelector('summary');\n            if (!summary) return;\n\n            // Create a clone of the details element to work with\n            const detailsClone = details.cloneNode(true);\n            \n            // Remove the summary from the clone\n            const summaryClone = detailsClone.querySelector('summary');\n            if (summaryClone) summaryClone.remove();\n            \n            // Remove elements matching the avoid selector\n            <?php if ($avoid): ?>\n            detailsClone.querySelectorAll('<?php echo $avoid; ?>').forEach(el => el.remove());\n            <?php endif; ?>\n            \n            // Get the text content from the remaining elements\n            let allText = detailsClone.textContent || '';\n            allText = allText.replace(/\\s+/g, ' ').trim(); // Normalize whitespace\n\n            // If there's text content, create and append the preview\n            if (allText) {\n                const preview = document.createElement('span');\n                preview.className = 'detailspreview';\n                // Limit to 250 characters and add ellipsis\n                preview.textContent = (allText.length > 250 ? \n                    allText.substring(0, 247) + '...' : \n                    allText);\n                summary.appendChild(preview);\n                summary.classList.add('ktwp-details-preview-added-summary');\n                details.classList.add('ktwp-details-preview-added');\n            }\n        });\n    <\/script>\n<?php \n}",
+      "notes": "",
+      "isFirst": true
+    },
+    {
+      "id": 2,
+      "originalText": "function addDetailsPreview() {\nglobal $selectors;\nglobal $avoid;\n    ?>   <script id=\"ktwp-details-excerpt\">\n        document.querySelectorAll('<?php echo $selectors; ?>').forEach(details => {\n            // Get the summary element\n            const summary = details.querySelector('summary');\n            if (!summary) return;\n\n            // Create a clone of the details element to work with\n            const detailsClone = details.cloneNode(true);\n            \n            // Remove the summary from the clone\n            const summaryClone = detailsClone.querySelector('summary');\n            if (summaryClone) summaryClone.remove();\n            \n            // Remove elements matching the avoid selector\n            <?php if ($avoid): ?>\n            detailsClone.querySelectorAll('<?php echo $avoid; ?>').forEach(el => el.remove());\n            <?php endif; ?>\n            \n            // Get the text content from the remaining elements\n            let allText = detailsClone.textContent || '';\n            allText = allText.replace(/\\s+/g, ' ').trim(); // Normalize whitespace\n\n            // If there's text content, create and append the preview\n            if (allText) {\n                const preview = document.createElement('span');\n                preview.className = 'detailspreview';\n                // Limit to 250 characters and add ellipsis\n                preview.textContent = (allText.length > 250 ? \n                    allText.substring(0, 247) + '...' : \n                    allText);\n                summary.appendChild(preview);\n                summary.classList.add('ktwp-details-preview-added-summary');\n                details.classList.add('ktwp-details-preview-added');\n            }\n        });\n    <\/script>\n<?php \n}",
+      "modifiedText": "function addDetailsPreview() {\nglobal $selectors;\nglobal $avoid;\n    ?>   <script id=\"ktwp-details-excerpt\">\n        function generatePreviews() {\n            // This will find ALL details elements matching your selector\n            document.querySelectorAll('<?php echo $selectors; ?>').forEach(details => {\n                // Skip if already processed - prevents duplicate previews\n                if (details.classList.contains('ktwp-details-preview-added')) return;\n                \n                const summary = details.querySelector('summary');\n                if (!summary) return;\n\n                const detailsClone = details.cloneNode(true);\n                const summaryClone = detailsClone.querySelector('summary');\n                if (summaryClone) summaryClone.remove();\n                \n                <?php if ($avoid): ?>\n                detailsClone.querySelectorAll('<?php echo $avoid; ?>').forEach(el => el.remove());\n                <?php endif; ?>\n                \n                let allText = detailsClone.textContent || '';\n                allText = allText.replace(/\\s+/g, ' ').trim();\n\n                if (allText) {\n                    const preview = document.createElement('span');\n                    preview.className = 'detailspreview';\n                    preview.textContent = (allText.length > 250 ? \n                        allText.substring(0, 247) + '...' : \n                        allText);\n                    summary.appendChild(preview);\n                    summary.classList.add('ktwp-details-preview-added-summary');\n                    details.classList.add('ktwp-details-preview-added'); // This prevents re-processing\n                }\n            });\n        }\n\n        // Process any existing content immediately\n        generatePreviews();\n\n        // Watch for new content being added to ANY part of the page\n        const observer = new MutationObserver(() => {\n            generatePreviews(); // Will check all details elements, but only process new ones\n        });\n\n        observer.observe(document.body, {\n            childList: true,  // Watch for new elements being added\n            subtree: true     // Watch the entire document tree\n        });\n    <\/script>\n<?php \n}",
+      "notes": "",
+      "isFirst": false
+    },
+    {
+      "id": 3,
+      "originalText": "function addDetailsPreview() {\nglobal $selectors;\nglobal $avoid;\n    ?>   <script id=\"ktwp-details-excerpt\">\n        function generatePreviews() {\n            // This will find ALL details elements matching your selector\n            document.querySelectorAll('<?php echo $selectors; ?>').forEach(details => {\n                // Skip if already processed - prevents duplicate previews\n                if (details.classList.contains('ktwp-details-preview-added')) return;\n                \n                const summary = details.querySelector('summary');\n                if (!summary) return;\n\n                const detailsClone = details.cloneNode(true);\n                const summaryClone = detailsClone.querySelector('summary');\n                if (summaryClone) summaryClone.remove();\n                \n                <?php if ($avoid): ?>\n                detailsClone.querySelectorAll('<?php echo $avoid; ?>').forEach(el => el.remove());\n                <?php endif; ?>\n                \n                let allText = detailsClone.textContent || '';\n                allText = allText.replace(/\\s+/g, ' ').trim();\n\n                if (allText) {\n                    const preview = document.createElement('span');\n                    preview.className = 'detailspreview';\n                    preview.textContent = (allText.length > 250 ? \n                        allText.substring(0, 247) + '...' : \n                        allText);\n                    summary.appendChild(preview);\n                    summary.classList.add('ktwp-details-preview-added-summary');\n                    details.classList.add('ktwp-details-preview-added'); // This prevents re-processing\n                }\n            });\n        }\n\n        // Process any existing content immediately\n        generatePreviews();\n\n        // Watch for new content being added to ANY part of the page\n        const observer = new MutationObserver(() => {\n            generatePreviews(); // Will check all details elements, but only process new ones\n        });\n\n        observer.observe(document.body, {\n            childList: true,  // Watch for new elements being added\n            subtree: true     // Watch the entire document tree\n        });\n    <\/script>\n<?php \n}",
+      "modifiedText": "",
+      "notes": "",
+      "isFirst": false
+    }
+  ]
+};
+
+/* beginning strikethrough */
+
+// Get the strikethrough checkbox
+const strikethroughCheckbox = document.getElementById('strikethroughDeleted');
+
+function applyStrikethroughSetting() {
+    const isEnabled = strikethroughCheckbox.checked;
+    
+    // Set the CSS variable
+    document.documentElement.style.setProperty(
+        '--strikethrough-deleted', 
+        isEnabled ? '#900 line-through' : 'none'
+    );
+    
+    // Save to localStorage
+    localStorage.setItem('strikethroughDeleted', isEnabled);
+}
+
+// Load saved setting on page load
+const savedStrikethrough = localStorage.getItem('strikethroughDeleted');
+if (savedStrikethrough !== null) {
+    strikethroughCheckbox.checked = savedStrikethrough === 'true';
+} else {
+    // Default to checked if no saved setting
+    strikethroughCheckbox.checked = false;
+}
+
+// Apply the initial setting
+applyStrikethroughSetting();
+
+// Listen for checkbox changes
+strikethroughCheckbox.addEventListener('change', applyStrikethroughSetting);
+
+
+
+/* done with strikethrough */
+
+
+/* beginning inserting underline */
+
+// Get the underline checkbox
+const underlineCheckbox = document.getElementById('underlineInserted');
+
+function applyunderlineSetting() {
+    const isEnabled = underlineCheckbox.checked;
+    
+    // Set the CSS variable
+    document.documentElement.style.setProperty(
+        '--underline-inserted', 
+        isEnabled ? '#090 wavy underline' : 'none'
+    );
+    
+    // Save to localStorage
+    localStorage.setItem('underlineInserted', isEnabled);
+}
+
+// Load saved setting on page load
+const savedunderline = localStorage.getItem('underlineInserted');
+if (savedunderline !== null) {
+    underlineCheckbox.checked = savedunderline === 'true';
+} else {
+    // Default to checked if no saved setting
+    underlineCheckbox.checked = false;
+}
+
+// Apply the initial setting
+applyunderlineSetting();
+
+// Listen for checkbox changes
+underlineCheckbox.addEventListener('change', applyunderlineSetting);
+
+
+
+/* done with insertion underlline */
+
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            const btn = document.getElementById('settingsBtn');
+            
+            if (panel.classList.contains('open')) {
+                panel.classList.remove('open');
+                btn.classList.remove('active');
+                btn.innerHTML = '⚙️ Settings';
+            } else {
+                panel.classList.add('open');
+                btn.classList.add('active');
+                btn.innerHTML = '❌ Close Settings';
+            }
+        }
+  function toggleInstructions() {
+            const panel = document.getElementById('instructionsPanel');
+            const btn = document.getElementById('instructionsBtn');
+            
+            if (panel.classList.contains('open')) {
+                panel.classList.remove('open');
+                btn.classList.remove('active');
+                btn.innerHTML = '⚙️ Settings';
+            } else {
+                panel.classList.add('open');
+                btn.classList.add('active');
+                btn.innerHTML = '❌ Close Instructions';
+            }
+        }
+
+        // FIXED: Handle 0-100 range and actually recalculate
+        function updateSetting(settingName) {
+            const element = document.getElementById(settingName);
+            let value;
+            
+            if (element.type === 'checkbox') {
+                value = element.checked;
+            } else if (element.type === 'number') {
+                value = parseInt(element.value);
+            } else {
+                // Convert 0-100 slider to 0-1 decimal
+                value = parseFloat(element.value) / 100;
+            }
+            
+            diffSettings[settingName] = value;
+            console.log(`${settingName} changed to ${value} (${Math.round(value*100)}%)`);
+            
+            // Update display
+            if (element.type === 'range') {
+                const displayElement = document.getElementById(settingName + 'Value');
+                if (displayElement) {
+                    displayElement.textContent = element.value + '%';
+                }
+            }
+            
+            // Force recalculation
+            versions.forEach((version, index) => {
+                updateDiff(index);
+            });
+        }
+        
+
+
+        // FIXED: Tooltip functions with debug
+        function showTooltip(event, content) {
+            console.log('Showing tooltip');
+            
+            if (!globalTooltip) {
+                globalTooltip = document.createElement('div');
+                globalTooltip.className = 'tooltip';
+                document.body.appendChild(globalTooltip);
+            }
+            
+            globalTooltip.innerHTML = content;
+            globalTooltip.style.left = (event.pageX + 10) + 'px';
+            globalTooltip.style.top = (event.pageY - 10) + 'px';
+            globalTooltip.classList.add('show');
+        }
+
+        function hideTooltip() {
+            if (globalTooltip) {
+                globalTooltip.classList.remove('show');
+                console.log('Hiding tooltip');
+            }
+        }
+
+        function normalizeLine(line) {
+            return line.trim().replace(/\s+/g, ' ');
+        }
+        
+      function normalizeText(text) {
+    const lines = text.split('\n');
+    const normalized = [];
+    const original = [];
+    const lineMap = []; // Maps normalized index to original line number
+    
+    lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
+        if (trimmedLine !== '') { // Only include non-empty lines
+            normalized.push(trimmedLine);
+            original.push(line);
+            lineMap.push(index + 1); // Store 1-based original line number
+        }
+    });
+    
+    return { 
+        normalized, 
+        original, 
+        lineMap // New: maps each filtered line back to its original line number
+    };
+}
+        // FIXED: Much simpler similarity calculation
+    function shouldUseInlineDiff(line1, line2) {
+    console.log('=== DEBUG shouldUseInlineDiff ===');
+    console.log('Line1:', line1);
+    console.log('Line2:', line2);
+    
+    const reasons = {
+        lengthRatio: 0,
+        wordSimilarity: 0,
+        charDifference: 0,
+        passed: false,
+        failureReason: ''
+    };
+    
+    // Length check
+    const lengthRatio = Math.min(line1.length, line2.length) / Math.max(line1.length, line2.length);
+    reasons.lengthRatio = lengthRatio;
+    console.log('Length ratio:', lengthRatio);
+    
+    if (lengthRatio < diffSettings.lengthRatio) {
+        reasons.failureReason = `Length ratio ${Math.round(lengthRatio*100)}% < ${Math.round(diffSettings.lengthRatio*100)}%`;
+        console.log('FAILED length check:', reasons.failureReason);
+        return reasons;
+    }
+    
+    // Word similarity
+    const words1 = line1.toLowerCase().split(/\W+/).filter(w => w.length > 0);
+    const words2 = line2.toLowerCase().split(/\W+/).filter(w => w.length > 0);
+    console.log('Words1:', words1);
+    console.log('Words2:', words2);
+    
+    if (words1.length === 0 && words2.length === 0) {
+        reasons.wordSimilarity = 1.0;
+    } else if (words1.length === 0 || words2.length === 0) {
+        reasons.wordSimilarity = 0;
+    } else {
+        const set1 = new Set(words1);
+        const set2 = new Set(words2);
+        const intersection = new Set([...set1].filter(x => set2.has(x)));
+        const union = new Set([...set1, ...set2]);
+        console.log('Set1:', set1);
+        console.log('Set2:', set2);
+        console.log('Intersection:', intersection);
+        console.log('Union:', union);
+        reasons.wordSimilarity = intersection.size / union.size;
+    }
+    console.log('Word similarity:', reasons.wordSimilarity);
+    
+    if (reasons.wordSimilarity < diffSettings.wordSimilarity) {
+        reasons.failureReason = `Word similarity ${Math.round(reasons.wordSimilarity*100)}% < ${Math.round(diffSettings.wordSimilarity*100)}%`;
+        console.log('FAILED word check:', reasons.failureReason);
+        return reasons;
+    }
+    
+    // FIXED: Proper character difference using Levenshtein distance
+    function levenshteinDistance(str1, str2) {
+        const matrix = [];
+        
+        for (let i = 0; i <= str2.length; i++) {
+            matrix[i] = [i];
+        }
+        
+        for (let j = 0; j <= str1.length; j++) {
+            matrix[0][j] = j;
+        }
+        
+        for (let i = 1; i <= str2.length; i++) {
+            for (let j = 1; j <= str1.length; j++) {
+                if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1, // substitution
+                        matrix[i][j - 1] + 1,     // insertion
+                        matrix[i - 1][j] + 1      // deletion
+                    );
+                }
+            }
+        }
+        
+        return matrix[str2.length][str1.length];
+    }
+
+    const maxLen = Math.max(line1.length, line2.length);
+    if (maxLen === 0) {
+        reasons.charDifference = 0;
+    } else {
+        const editDistance = levenshteinDistance(line1, line2);
+        reasons.charDifference = editDistance / maxLen;
+    }
+    console.log('Character difference:', reasons.charDifference);
+    
+    if (reasons.charDifference >= diffSettings.charDifference) {
+        reasons.failureReason = `Character differences ${Math.round(reasons.charDifference*100)}% >= ${Math.round(diffSettings.charDifference*100)}%`;
+        console.log('FAILED char check:', reasons.failureReason);
+        return reasons;
+    }
+    
+    reasons.passed = true;
+    console.log('PASSED all checks');
+    return reasons;
+}
+        function wordDiff(oldLine, newLine) {
+          console.log('=== WORD DIFF DEBUG ===');
+    console.log('OLD LINE:', JSON.stringify(oldLine));
+    console.log('NEW LINE:', JSON.stringify(newLine));
+    
+ 
+        
+            const oldTokens = oldLine.split(/(\s+|[^\w\s])/).filter(t => t.length > 0);
+            const newTokens = newLine.split(/(\s+|[^\w\s])/).filter(t => t.length > 0);
+            
+  
+    console.log('OLD TOKENS:', oldTokens);
+    console.log('NEW TOKENS:', newTokens);
+    
+            const m = oldTokens.length;
+            const n = newTokens.length;
+            const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+            
+            for (let i = 1; i <= m; i++) {
+                for (let j = 1; j <= n; j++) {
+                    if (oldTokens[i - 1] === newTokens[j - 1]) {
+                        dp[i][j] = dp[i - 1][j - 1] + 1;
+                    } else {
+                        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                    }
+                }
+            }
+            
+            const result = [];
+            let i = m, j = n;
+            
+            while (i > 0 || j > 0) {
+                if (i > 0 && j > 0 && oldTokens[i - 1] === newTokens[j - 1]) {
+                    result.unshift({ type: 'equal', token: oldTokens[i - 1] });
+                    i--; j--;
+                } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+                    result.unshift({ type: 'insert', token: newTokens[j - 1] });
+                    j--;
+                } else if (i > 0) {
+                    result.unshift({ type: 'delete', token: oldTokens[i - 1] });
+                    i--;
+                }
+            }
+             console.log('WORD DIFF RESULT:', result);
+   
+            return result;
+        }
+
+       function renderInlineDiff(oldLine, newLine) {
+         console.log('=== RENDER INLINE DIFF INPUT ===');
+    console.log('oldLine input:', JSON.stringify(oldLine));
+    console.log('newLine input:', JSON.stringify(newLine));
+  
+    // Extract leading whitespace from both lines
+    const oldIndent = oldLine.match(/^(\s*)/)[1];
+    const newIndent = newLine.match(/^(\s*)/)[1];
+    const oldContent = oldLine.substring(oldIndent.length);
+    const newContent = newLine.substring(newIndent.length);
+    
+    let html = '<span class="diff-prefix">±</span>';
+    
+   // Handle indentation changes first
+if (oldIndent !== newIndent) {
+    // Convert to a common format for comparison (Assumes 8 spaces per tab for browser default)
+    const oldSpaceCount = oldIndent.replace(/\t/g, '        ').length; // 8 spaces per tab
+    const newSpaceCount = newIndent.replace(/\t/g, '        ').length;
+    
+    const minSpaceCount = Math.min(oldSpaceCount, newSpaceCount);
+    
+    // Show common indentation first (unchanged)
+    if (minSpaceCount > 0) {
+        const commonSpaces = ' '.repeat(minSpaceCount);
+        html += commonSpaces.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    
+    // Show the difference
+    if (oldSpaceCount > minSpaceCount) {
+        const removedSpaces = ' '.repeat(oldSpaceCount - minSpaceCount);
+        html += `<span class="word-removed">${removedSpaces.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`;
+    }
+    
+    if (newSpaceCount > minSpaceCount) {
+        const addedSpaces = ' '.repeat(newSpaceCount - minSpaceCount);
+        html += `<span class="word-added">${addedSpaces.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`;
+    }
+} else {
+    // Same indentation, just add it
+    html += oldIndent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+    // Now handle the content part (non-whitespace)
+    const diff = wordDiff(oldContent, newContent);
+    
+    const grouped = [];
+    let currentGroup = null;
+    
+    diff.forEach(item => {
+        if (item.type === 'equal') {
+            if (currentGroup) {
+                grouped.push(currentGroup);
+                currentGroup = null;
+            }
+            grouped.push(item);
+        } else {
+            if (!currentGroup) {
+                currentGroup = { type: 'change', deletes: [], inserts: [] };
+            }
+            if (item.type === 'delete') {
+                currentGroup.deletes.push(item.token);
+            } else {
+                currentGroup.inserts.push(item.token);
+            }
+        }
+    });
+    
+    if (currentGroup) {
+        grouped.push(currentGroup);
+    }
+    
+    const changeGroups = grouped.filter(g => g.type === 'change').length;
+    if (changeGroups > diffSettings.maxChangeGroups) {
+        return null;
+    }
+    
+    grouped.forEach(item => {
+        if (item.type === 'equal') {
+            const escaped = item.token.replace(/&/g, '&amp;')
+                                      .replace(/</g, '&lt;')
+                                      .replace(/>/g, '&gt;');
+            html += escaped;
+        } else if (item.type === 'change') {
+            if (item.deletes.length > 0) {
+                const deletedText = item.deletes.join('').replace(/&/g, '&amp;')
+                                                       .replace(/</g, '&lt;')
+                                                       .replace(/>/g, '&gt;');
+                html += `<span class="word-removed">${deletedText}</span>`;
+            }
+            if (item.inserts.length > 0) {
+                const insertedText = item.inserts.join('').replace(/&/g, '&amp;')
+                                                         .replace(/</g, '&lt;')
+                                                         .replace(/>/g, '&gt;');
+                html += `<span class="word-added">${insertedText}</span>`;
+            }
+        }
+    });
+    
+    return html;
+}
+
+
+function createInfoIcon(reasons, type) {
+    const icon = document.createElement('span');
+    icon.className = 'diff-info-icon';
+    icon.textContent = 'ℹ';
+    
+    let tooltipContent;
+    if (type === 'modified') {
+        tooltipContent = `Inline diff formatting applied.\nPassed all settings thresholds:\n Length Similarity: ${Math.round(reasons.lengthRatio*100)}%,\n Shared Words: ${Math.round(reasons.wordSimilarity*100)}%,\n Char Difference: ${Math.round(reasons.charDifference*100)}%`;
+    } else {
+        if (reasons.failureReason === 'No more lines available for comparison') {
+            tooltipContent = `Shown as separate line: No suitable line available for comparison`;
+        } else {
+            tooltipContent = `Separate lines\n ${reasons.failureReason}`;
+        }
+    }
+    
+    icon.title = tooltipContent;
+    return icon;
+}
+        
+        function lcs(a, b) {
+            const m = a.length;
+            const n = b.length;
+            const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+            
+            for (let i = 1; i <= m; i++) {
+                for (let j = 1; j <= n; j++) {
+                    if (a[i - 1] === b[j - 1]) {
+                        dp[i][j] = dp[i - 1][j - 1] + 1;
+                    } else {
+                        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                    }
+                }
+            }
+            
+            return dp;
+        }
+        
+function computeDiff(text1, text2) {
+    console.log('=== RAW TEXT LINES ===');
+    const rawLines1 = text1.split('\n');
+    const rawLines2 = text2.split('\n');
+    
+    rawLines1.forEach((line, i) => {
+        console.log(`RAW LINE1[${i}]:`, JSON.stringify(line));
+    });
+    rawLines2.forEach((line, i) => {
+        console.log(`RAW LINE2[${i}]:`, JSON.stringify(line));
+    });
+    
+    const result1 = normalizeText(text1);
+    const result2 = normalizeText(text2);
+    
+    const lines1 = result1.normalized;
+    const lines2 = result2.normalized;
+    const original1 = result1.original;
+    const original2 = result2.original;
+    const lineMap1 = result1.lineMap; // Original line numbers for text1
+    const lineMap2 = result2.lineMap; // Original line numbers for text2
+    
+    const lcsTable = lcs(lines1, lines2);
+    
+    const diff = [];
+    let i = lines1.length;
+    let j = lines2.length;
+    
+    while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && lines1[i - 1] === lines2[j - 1]) {
+            diff.unshift({ 
+                type: 'unchanged', 
+                content: original1[i - 1],
+                leftLineNumber: lineMap1[i - 1],
+                rightLineNumber: lineMap2[j - 1]
+            });
+            i--;
+            j--;
+        } else {
+            let foundInlineDiff = false;
+            
+            if (i > 0 && j > 0) {
+                const reasons = shouldUseInlineDiff(lines1[i - 1], lines2[j - 1]);
+                
+                if (reasons.passed) {
+                    const inlineHtml = renderInlineDiff(original1[i - 1], original2[j - 1]);
+    
+                    if (inlineHtml) {
+                        diff.unshift({ 
+                            type: 'modified', 
+                            oldContent: original1[i - 1],
+                            newContent: original2[j - 1],
+                            inlineHtml: inlineHtml,
+                            reasons: reasons,
+                            leftLineNumber: lineMap1[i - 1],
+                            rightLineNumber: lineMap2[j - 1]
+                        });
+                        i--;
+                        j--;
+                        foundInlineDiff = true;
+                    }
+                }
+            }
+            
+            if (!foundInlineDiff) {
+                if (j > 0 && (i === 0 || lcsTable[i][j - 1] >= lcsTable[i - 1][j])) {
+                    const addedItem = { 
+                        type: 'added', 
+                        content: original2[j - 1],
+                        rightLineNumber: lineMap2[j - 1]
+                    };
+                    
+                    if (i > 0) {
+                        const reasons = shouldUseInlineDiff(lines1[i - 1], lines2[j - 1]);
+                        addedItem.failedComparison = {
+                            comparedWith: original1[i - 1],
+                            reasons: reasons
+                        };
+                    } else {
+                        addedItem.failedComparison = {
+                            comparedWith: null,
+                            reasons: {
+                                passed: false,
+                                failureReason: 'No more lines available for comparison',
+                                lengthRatio: 0,
+                                wordSimilarity: 0,
+                                charDifference: 0
+                            }
+                        };
+                    }
+                    
+                    diff.unshift(addedItem);
+                    j--;
+                } else if (i > 0) {
+                    const removedItem = { 
+                        type: 'removed', 
+                        content: original1[i - 1],
+                        leftLineNumber: lineMap1[i - 1]
+                    };
+                    
+                    if (j > 0) {
+                        const reasons = shouldUseInlineDiff(lines1[i - 1], lines2[j - 1]);
+                        removedItem.failedComparison = {
+                            comparedWith: original2[j - 1],
+                            reasons: reasons
+                        };
+                    } else {
+                        removedItem.failedComparison = {
+                            comparedWith: null,
+                            reasons: {
+                                passed: false,
+                                failureReason: 'No more lines available for comparison',
+                                lengthRatio: 0,
+                                wordSimilarity: 0,
+                                charDifference: 0
+                            }
+                        };
+                    }
+                    
+                    diff.unshift(removedItem);
+                    i--;
+                }
+            }
+        }
+    }
+    
+    return diff;
+}
+ function renderDiff(diff) {
+    if (diff.length === 0) {
+        return '<div class="empty-state">Enter text in both areas to see differences</div>';
+    }
+
+    const hasChanges = diff.some(item => item.type !== 'unchanged');
+    if (!hasChanges) {
+        return '<div class="no-changes">No changes detected</div>';
+    }
+    
+    const fragment = document.createDocumentFragment();
+    hdr=document.createElement('div');
+    hdr.innerHTML='<div class="diff-line-numbers"><span class="left-num">Bef</span><span class="right-num">Aft</span></div><div class="diff-line-content"><span class="diff-prefix">±</span>Line<span class="leading-white-space"></span><span class="line-content"></span><span style="position:absolute;right:12px;">Why ±?</span></div>';
+    hdr.className="diff-line diff-header";
+    fragment.appendChild(hdr);
+    lastRenderedRow="";
+    diff.forEach(item => {
+    
+      if (lastRenderedRow!=item.type) {
+         contDiv = document.createElement("div");
+         contDiv.className="container-"+item.type;
+         fragment.appendChild(contDiv);
+         lastRenderedRow=item.type;
+        }
+    
+    
+    
+    
+        const escapeHtml = (text) => text.replace(/&/g, '&amp;')
+                                      .replace(/</g, '&lt;')
+                                      .replace(/>/g, '&gt;')
+                                      .replace(/^(\s*)(.*)/, '<span class="leading-white-space">$1</span><span class="line-content">$2</span>');
+        
+        const lineDiv = document.createElement('div');
+        lineDiv.className = 'diff-line';
+        
+        // Create dual line number element
+        const lineNumberDiv = document.createElement('div');
+        lineNumberDiv.className = 'diff-line-numbers';
+        
+        // Create content element
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'diff-line-content';
+       
+        if (item.type === 'unchanged') {
+            lineNumberDiv.innerHTML = `<span class="left-num">${item.leftLineNumber}</span><span class="right-num">${item.rightLineNumber}</span>`;
+            contentDiv.innerHTML = `<span class="diff-prefix diff-equal">=</span>${escapeHtml(item.content)}`;
+        } else if (item.type === 'added') {
+            lineDiv.className += ' diff-line-added';
+            lineNumberDiv.innerHTML = `<span class="left-num"></span><span class="right-num">${item.rightLineNumber}</span>`;
+            contentDiv.innerHTML = `<span class="diff-prefix diff-insert">+</span>${escapeHtml(item.content)}`;
+            
+            if (item.failedComparison) {
+                contentDiv.appendChild(createInfoIcon(item.failedComparison.reasons, 'separate'));
+            }
+        } else if (item.type === 'removed') {
+            lineDiv.className += ' diff-line-removed';
+            lineNumberDiv.innerHTML = `<span class="left-num">${item.leftLineNumber}</span><span class="right-num"></span>`;
+            contentDiv.innerHTML = `<span class="diff-prefix diff-delete">-</span>${escapeHtml(item.content)}`;
+            
+            if (item.failedComparison) {
+                contentDiv.appendChild(createInfoIcon(item.failedComparison.reasons, 'separate'));
+            }
+        } else if (item.type === 'modified') {
+            lineDiv.className += ' diff-line-modified';
+            lineNumberDiv.innerHTML = `<span class="left-num">${item.leftLineNumber}</span><span class="right-num">${item.rightLineNumber}</span>`;
+            contentDiv.innerHTML = item.inlineHtml;
+            contentDiv.appendChild(createInfoIcon(item.reasons, 'modified'));
+        }
+        
+        lineDiv.appendChild(lineNumberDiv);
+        lineDiv.appendChild(contentDiv);
+        
+       
+        fragment.lastElementChild.appendChild(lineDiv);
+    });
+    fragment.innerHTML=fragment.innerHTML+"</div>";
+    const tempDiv = document.createElement('div');
+    tempDiv.appendChild(fragment);
+    return "<!-- start -->"+tempDiv.innerHTML+"<!-- end -->";
+}
+
+        function saveState() {
+            const state = {
+                timestamp: new Date().toISOString(),
+                versionCounter: versionCounter,
+                diffSettings: diffSettings,
+                versions: versions.map((version, index) => ({
+                    id: version.id,
+                    originalText: version.originalTextarea.value,
+                    modifiedText: version.modifiedTextarea.value,
+                    notes: version.notesInput ? version.notesInput.value : '',
+                    isFirst: index === 0
+                }))
+            };
+            
+            const dataStr = JSON.stringify(state, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = `diff-session-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function loadState() {
+            document.getElementById('fileInput').click();
+        }
+
+        function handleFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const state = JSON.parse(e.target.result);
+                    restoreState(state);
+                } catch (error) {
+                    alert('Error loading file: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+function sampleFileLoad(state) {
+            restoreState(state);
+        }
+
+function restoreState(state) {
+    isRestoringState = true; // Prevent new version creation during restore
+    
+    if (state.diffSettings) {
+        diffSettings = { ...diffSettings, ...state.diffSettings };
+        updateSettingsUI();
+    }
+    
+    const container = document.getElementById('versionsContainer');
+    container.innerHTML = '';
+    versions = [];
+    versionCounter = state.versionCounter || 1;
+    
+    state.versions.forEach((versionData, index) => {
+        const version = createVersionFromData(versionData, index === 0);
+        version.originalTextarea.value = versionData.originalText;
+        version.modifiedTextarea.value = versionData.modifiedText;
+        if (version.notesInput && versionData.notes) {
+            version.notesInput.value = versionData.notes;
+        }
+        
+        if (versionData.originalText.trim() || versionData.modifiedText.trim()) {
+            updateDiff(index);
+        }
+    });
+    
+    isRestoringState = false; // Re-enable new version creation
+}
+
+
+        function updateSettingsUI() {
+            Object.keys(diffSettings).forEach(key => {
+                const element = document.getElementById(key);
+                if (element) {
+                    if (element.type === 'checkbox') {
+                        element.checked = diffSettings[key];
+                    } else if (element.type === 'range') {
+                        // Convert 0-1 decimal back to 0-100 for display
+                        element.value = Math.round(diffSettings[key] * 100);
+                        const displayElement = document.getElementById(key + 'Value');
+                        if (displayElement) {
+                            displayElement.textContent = element.value + '%';
+                        }
+                    } else {
+                        element.value = diffSettings[key];
+                    }
+                }
+            });
+        }
+
+        function createVersionFromData(versionData, isFirst) {
+            const container = document.getElementById('versionsContainer');
+            
+            const versionDiv = document.createElement('div');
+            versionDiv.className = 'version-section';
+            versionDiv.id = `version-${versionData.id}`;
+            
+            const versionTitle = isFirst ? 'Initial Comparison' : `Version ${versionData.id - 1} → ${versionData.id}`;
+            const deleteButton = isFirst ? '' : `<button class="btn btn-danger" onclick="deleteVersion(${versions.length})">Delete This Version</button>`;
+            
+            const notesSection = `
+                <div class="notes-section">
+                    <label for="notes-${versionData.id}">Notes for ${isFirst ? 'Initial' : `Version ${versionData.id}`}:</label>
+                    <textarea 
+                        
+                        id="notes-${versionData.id}" 
+                        class="notes-input"
+                        placeholder="Add your notes about this version..."
+                    ></textarea>
+                </div>
+            `;
+            
+            versionDiv.innerHTML = `
+                <div class="version-header">
+                    <h2 class="version-title">${versionTitle}</h2>
+                    <div class="version-actions">
+                        ${deleteButton}
+                    </div>
+                </div>
+                
+                ${notesSection}
+                
+                <div class="input-grid">
+                    <div class="input-section">
+                        <h3>${isFirst ? 'Original Text' : `Version ${versionData.id - 1}`}</h3>
+                        <textarea 
+                            id="original-${versionData.id}" 
+                            class="text-input"
+                            placeholder="Enter your original text here..."
+                            ${isFirst ? '' : 'readonly'}
+                        ></textarea>
+                    </div>
+                    
+                    <div class="input-section">
+                        <h3>Version ${versionData.id}</h3>
+                        <textarea 
+                            id="modified-${versionData.id}" 
+                            class="text-input" 
+                            placeholder="Enter your modified text here..."
+                        ></textarea>
+                    </div>
+                </div>
+                
+                <details class="diff-details">
+                    <summary>View Differences, ${(versionData.id-1)?(versionData.id-1):"orig"}→${versionData.id}</summary>
+                    <div class="diff-output" id="diff-${versionData.id}">
+                        <div class="empty-state">Enter text in both areas to see differences</div>
+                    </div>
+                </details>
+            `;
+            
+            container.appendChild(versionDiv);
+            
+            const originalTextarea = document.getElementById(`original-${versionData.id}`);
+            const modifiedTextarea = document.getElementById(`modified-${versionData.id}`);
+            const diffOutput = document.getElementById(`diff-${versionData.id}`);
+            const notesInput = document.getElementById(`notes-${versionData.id}`);
+            
+            const version = {
+                id: versionData.id,
+                element: versionDiv,
+                originalTextarea,
+                modifiedTextarea,
+                diffOutput,
+                notesInput,
+                nextVersionCreated: false
+            };
+            
+            versions.push(version);
+            const versionIndex = versions.length - 1;
+            
+            originalTextarea.addEventListener('input', () => updateDiff(versionIndex));
+            modifiedTextarea.addEventListener('input', () => {
+                updateDiff(versionIndex);
+                updateNextVersionOriginal(versionIndex);
+            });
+            
+            return version;
+        }
+
+function updateDiff(versionIndex) {
+    if (versionIndex >= versions.length) return;
+    
+    const version = versions[versionIndex];
+    const text1 = version.originalTextarea.value;
+    const text2 = version.modifiedTextarea.value;
+    
+    if (text1.trim() && text2.trim()) {
+        const diff = computeDiff(text1, text2);
+        version.diffOutput.innerHTML = renderDiff(diff);
+        
+        if (versionIndex === versions.length - 1) {
+            // Store scroll position
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            
+            checkAndCreateNextVersion();
+            
+            // Use requestAnimationFrame to ensure DOM is updated first
+            requestAnimationFrame(() => {
+                window.scrollTo(0, scrollTop);
+                //ENABLE TO HAVE POP OPEN version.element.querySelector(".diff-details:not(*[data-mk-diff-alreadyOpen]").setAttribute("open","true"); /* open the details. It only gets here the first time the modified is copied to the diff, so if they close it again and keep editing, won't keep popping open. */
+                // Double-check with another frame if needed
+                requestAnimationFrame(() => {
+                    window.scrollTo(0, scrollTop);
+                });
+            });
+        }
+    } else {
+        version.diffOutput.innerHTML = '<div class="empty-state">Enter text in both areas to see differences</div>';
+    }
+}
+
+        function updateNextVersionOriginal(versionIndex) {
+            if (versionIndex + 1 < versions.length) {
+                const currentVersion = versions[versionIndex];
+                const nextVersion = versions[versionIndex + 1];
+                nextVersion.originalTextarea.value = currentVersion.modifiedTextarea.value;
+                
+                updateDiff(versionIndex + 1);
+                updateNextVersionOriginal(versionIndex + 1);
+            }
+        }
+
+       function checkAndCreateNextVersion() {
+    const lastVersion = versions[versions.length - 1];
+    const hasOriginal = lastVersion.originalTextarea.value.trim();
+    const hasModified = lastVersion.modifiedTextarea.value.trim();
+    
+    // Don't create new versions during state restoration
+    if (hasOriginal && hasModified && !lastVersion.nextVersionCreated && !isRestoringState) {
+        lastVersion.nextVersionCreated = true;
+        setTimeout(() => {
+            createNextVersion();
+        }, 100);
+    }
+}
+
+        function createVersion(isFirst = false) {
+            const container = document.getElementById('versionsContainer');
+            
+            const versionDiv = document.createElement('div');
+            versionDiv.className = 'version-section';
+            versionDiv.id = `version-${versionCounter}`;
+            
+            const versionTitle = isFirst ? 'Initial Comparison' : `Version ${versionCounter - 1} → ${versionCounter}`;
+            const deleteButton = isFirst ? '' : `<button class="btn btn-danger" onclick="deleteVersion(${versions.length})">Delete This Version</button>`;
+            
+            const notesSection = `
+                <div class="notes-section">
+                    <label for="notes-${versionCounter}">Notes for ${isFirst ? 'Initial' : `Version ${versionCounter}`}:</label>
+                    <textarea 
+                        type="text" 
+                        id="notes-${versionCounter}" 
+                        class="notes-input"
+                        placeholder="Add your notes about this version..."
+                    ></textarea>
+                </div>
+            `;
+            
+            versionDiv.innerHTML = `
+                <div class="version-header">
+                    <h2 class="version-title">${versionTitle}</h2>
+                    <div class="version-actions">
+                        ${deleteButton}
+                    </div>
+                </div>
+                
+                ${notesSection}
+                
+                <div class="input-grid">
+                    <div class="input-section">
+                        <h3>${isFirst ? 'Original Text' : `Version ${versionCounter - 1}`}</h3>
+                        <textarea 
+                            id="original-${versionCounter}" 
+                            class="text-input"
+                            placeholder="Enter your original text here..."
+                            ${isFirst ? '' : 'readonly'}
+                        ></textarea>
+                    </div>
+                    
+                    <div class="input-section">
+                        <h3>Version ${versionCounter}</h3>
+                        <textarea 
+                            id="modified-${versionCounter}" 
+                            class="text-input" 
+                            placeholder="Enter your modified text here..."
+                        ></textarea>
+                    </div>
+                </div>
+                
+                <details class="diff-details">
+                    <summary>View Differences, orig→1</summary>
+                    <div class="diff-output" id="diff-${versionCounter}">
+                        <div class="empty-state">Enter text in both areas to see differences</div>
+                    </div>
+                </details>
+            `;
+            
+            container.appendChild(versionDiv);
+            
+            const originalTextarea = document.getElementById(`original-${versionCounter}`);
+            const modifiedTextarea = document.getElementById(`modified-${versionCounter}`);
+            const diffOutput = document.getElementById(`diff-${versionCounter}`);
+            const notesInput = document.getElementById(`notes-${versionCounter}`);
+            
+            const version = {
+                id: versionCounter,
+                element: versionDiv,
+                originalTextarea,
+                modifiedTextarea,
+                diffOutput,
+                notesInput,
+                nextVersionCreated: false
+            };
+            
+            versions.push(version);
+            const versionIndex = versions.length - 1;
+            
+            if (!isFirst && versionIndex > 0) {
+                const previousVersion = versions[versionIndex - 1];
+                originalTextarea.value = previousVersion.modifiedTextarea.value;
+                updateDiff(versionIndex);
+            }
+            
+            originalTextarea.addEventListener('input', () => updateDiff(versionIndex));
+            modifiedTextarea.addEventListener('input', () => {
+                updateDiff(versionIndex);
+                updateNextVersionOriginal(versionIndex);
+            });
+            
+            versionCounter++;
+            return version;
+        }
+
+        function createNextVersion() {
+            const newVersion = createVersion(false);
+          //  newVersion.element.scrollIntoView({ behavior: 'smooth' }); think these were causing jumps
+          //  newVersion.modifiedTextarea.focus();
+        }
+
+        function deleteVersion(versionIndex) {
+            if (versions.length <= 1) return;
+            
+            const version = versions[versionIndex];
+            version.element.remove();
+            versions.splice(versionIndex, 1);
+            
+            for (let i = versionIndex; i < versions.length; i++) {
+                updateVersionLabels(i);
+                
+                if (i === 0) {
+                    versions[i].originalTextarea.removeAttribute('readonly');
+                }
+                
+                if (i > 0) {
+                    versions[i].originalTextarea.value = versions[i - 1].modifiedTextarea.value;
+                    updateDiff(i);
+                }
+            }
+        }
+
+        function updateVersionLabels(versionIndex) {
+            const version = versions[versionIndex];
+            const isFirst = versionIndex === 0;
+            const versionNum = versionIndex + 1;
+            
+            const header = version.element.querySelector('.version-title');
+            header.textContent = isFirst ? 'Initial Comparison' : `Version ${versionNum - 1} → ${versionNum}`;
+            
+            const labels = version.element.querySelectorAll('.input-section h3');
+            labels[0].textContent = isFirst ? 'Original Text' : `Version ${versionNum - 1}`;
+            labels[1].textContent = `Version ${versionNum}`;
+            
+            const notesLabel = version.element.querySelector('label');
+            if (notesLabel) {
+                notesLabel.textContent = `Notes for ${isFirst ? 'Initial' : `Version ${versionNum}`}:`;
+            }
+        }
+
+        createVersion(true);
+        updateSettingsUI();
+    </script>
+Michael E. Kupietz - demos@michaelkupietz.com - https://michaelkupietz.com/demos/big-diffr/
+</body>
+</html>
